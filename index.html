@@ -1,0 +1,145 @@
+<!doctype html>
+<!--
+  Chrome Fever: entry page. Markup only; styles live in src/styles.css and the
+  game in src/main.js. The import map below pins Three.js 0.160.0 from CDNs.
+  UI text is German on purpose (game localization). See docs/architecture.md.
+-->
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Chrome Fever</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Chakra+Petch:wght@400;600;700&family=Noto+Sans+JP:wght@900&display=swap">
+<link rel="stylesheet" href="src/styles.css">
+</head>
+<body>
+
+<!-- Stage: WebGL canvas (#game) with the 2D overlay canvas (#fx) on top. -->
+<div id="stage">
+  <canvas id="game" aria-label="Spielfeld"></canvas>
+  <canvas id="fx" aria-hidden="true"></canvas>
+
+  <!-- In-game HUD, shown while a run is active. Updated by hud() in main.js. -->
+  <div id="hud" hidden>
+    <div class="hud-left">
+      <div class="bar hp" id="hpBar">
+        <div class="bar-label"><span>HP</span><span id="hpText">100 / 100</span></div>
+        <div class="bar-track"><div class="bar-fill" id="hpFill"></div></div>
+      </div>
+      <div class="bar oc" id="ocBar">
+        <div class="bar-label"><span id="ocLabel">OVERCLOCK 0 %</span></div>
+        <div class="bar-track"><div class="bar-fill" id="ocFill" style="width:0%"></div></div>
+      </div>
+      <div class="weap"><span class="wjp" id="weapJp">天使</span><span class="wname" id="weapName">TENSHI-SMG</span><span class="wslots" id="weapSlots"><i class="on">1</i><i>2</i><i>3</i></span></div>
+    </div>
+    <div class="hud-right">
+      <div class="score" id="scoreEl">0</div>
+      <div class="meta"><span id="comboEl" hidden>×1.0</span><span id="waveEl">WELLE 01</span></div>
+      <div class="hud-btns">
+        <button id="btnMute" type="button">TON AN</button>
+        <button id="btnPause" type="button">PAUSE</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Touch action buttons, shown only on touch input. -->
+  <div id="touchBtns" hidden>
+    <button id="tDash" type="button">DASH</button>
+    <button id="tWeap" type="button">WAFFE</button>
+    <button id="tOC" type="button">OC</button>
+  </div>
+
+  <!-- Screens: only one is visible at a time, switched by show() in main.js. -->
+  <section id="menu" class="screen">
+    <div class="panel">
+      <p class="eyebrow"><span class="jp">ナイト・マーケット</span>Third-Person-Shooter · 2–5 Minuten pro Run</p>
+      <h1 class="logo"><span class="logo-a">Chrome</span><span class="logo-b" data-text="Fever">Fever<span class="logo-3d">3D</span></span></h1>
+      <p class="jp-vert" aria-hidden="true">クローム熱</p>
+      <p class="tagline">Regen über dem Night Market. Gangs, Konzern-Drohnen und ein Cyberpsycho wollen dich flatlinen. Halte durch, solange dein Chrome mitmacht.</p>
+      <div class="controls">
+        <div>
+          <h3>PC</h3>
+          <ul>
+            <li><kbd>WASD</kbd> bewegen</li>
+            <li><kbd>Maus</kbd> umsehen und zielen</li>
+            <li><kbd>Linksklick</kbd> halten zum Schießen</li>
+            <li><kbd>Shift</kbd> Dash · <kbd>Leertaste</kbd> Overclock</li>
+            <li><kbd>1</kbd> <kbd>2</kbd> <kbd>3</kbd> oder <kbd>Mausrad</kbd> Waffe wechseln</li>
+            <li><kbd>Esc</kbd> gibt die Maus frei und pausiert</li>
+          </ul>
+        </div>
+        <div>
+          <h3>Handy</h3>
+          <ul>
+            <li>Linke Bildschirmhälfte: bewegen</li>
+            <li>Rechte Hälfte wischen: umsehen und schießen</li>
+            <li>Zielhilfe ist auf dem Handy aktiv</li>
+            <li>Buttons unten: Dash, Waffe und Overclock</li>
+          </ul>
+        </div>
+      </div>
+      <div class="row">
+        <button class="btn primary" id="btnStart" type="button" disabled>Lädt …</button>
+        <span class="best">Bestwert <b id="bestMenu">0</b></span>
+      </div>
+      <div class="opts">
+        <span class="opt-l">Grafik</span>
+        <div class="seg" id="qSeg" role="group" aria-label="Grafikqualität"><button type="button" data-q="ultra">Ultra</button><button type="button" data-q="hoch">Hoch</button><button type="button" data-q="mittel">Mittel</button><button type="button" data-q="niedrig">Niedrig</button></div>
+        <button class="chip" id="btnMusic" type="button">Musik an</button>
+      </div>
+      <p class="hint" id="menuHint">Overclock lädt sich durch Kills auf. Aktiviert läuft die Zeit für alle außer dir in Zeitlupe. Das Katana schlägt Kugeln zurück.</p>
+    </div>
+  </section>
+
+  <section id="upgrade" class="screen" hidden>
+    <div class="panel wide">
+      <p class="eyebrow" id="upEyebrow"><span class="jp">クリア</span>Welle 01 geschafft</p>
+      <h2>Cyberware wählen</h2>
+      <div class="cards" id="cards"></div>
+      <p class="hint">Tasten 1–3 drücken oder eine Karte antippen. Nach jeder Welle heilst du 10 HP.</p>
+    </div>
+  </section>
+
+  <section id="pause" class="screen" hidden>
+    <div class="panel">
+      <p class="eyebrow"><span class="jp">一時停止</span>Run angehalten</p>
+      <h2>Pause</h2>
+      <p class="hint" style="margin:14px 0 8px">Installierte Cyberware</p>
+      <div id="pauseWare"></div>
+      <div class="row">
+        <button class="btn primary" id="btnResume" type="button">Weiter</button>
+        <button class="btn ghost" id="btnQuit" type="button">Run beenden</button>
+      </div>
+    </div>
+  </section>
+
+  <section id="over" class="screen" hidden>
+    <div class="panel">
+      <p class="eyebrow"><span class="jp">フラットライン</span>Vitalwerte: null</p>
+      <h2 class="flat">Flatline</h2>
+      <span class="newbest" id="newBest" hidden>Neuer Bestwert</span>
+      <dl class="stats">
+        <div><dt>Punkte</dt><dd id="oScore">0</dd></div>
+        <div><dt>Welle</dt><dd id="oWave">1</dd></div>
+        <div><dt>Kills</dt><dd id="oKills">0</dd></div>
+        <div><dt>Zeit</dt><dd id="oTime">0:00</dd></div>
+      </dl>
+      <p class="hint" style="margin:0 0 8px">Cyberware in diesem Run</p>
+      <div id="overWare"></div>
+      <div class="row">
+        <button class="btn primary" id="btnAgain" type="button">Nochmal</button>
+        <button class="btn ghost" id="btnMenu" type="button">Menü</button>
+        <span class="best">Bestwert <b id="bestOver">0</b></span>
+      </div>
+    </div>
+  </section>
+</div>
+
+
+<!-- Three.js core and addons resolve through this import map; no bundler. -->
+<script type="importmap">{"imports":{"three":"https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module" src="src/main.js"></script>
+</body>
+</html>
